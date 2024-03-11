@@ -26,9 +26,13 @@ diversity_threshold = 0.01
 # Per base coverage threshold for inclusion
 min_cov = int(coverage_threshold)
 
-# region
-pos_start = 2085
-pos_fin = 5096
+# Define regions of interest
+regions = [
+    {"pos_start": 2085, "pos_fin": 5096},
+    {"pos_start": 2550, "pos_fin": 3510},
+    {"pos_start": 2253, "pos_fin": 2538},
+    {"pos_start": 4359, "pos_fin": 5010}
+]
 
 # ETI calculation formula (eti = mx + c)
 eti_m = 259
@@ -39,6 +43,16 @@ step = 3
 
 # Start base in codon
 start_base = 3
+
+
+def get_positions_of_interest(region):
+    """Return positions in HXB2 coordinates to get data for"""
+    positions_of_interest = range(
+        region["pos_start"] + start_base - 1,
+        region["pos_fin"] + 1,
+        step,
+    )
+    return positions_of_interest
 
 
 def get_report_header(param):
@@ -81,28 +95,17 @@ def format_output_string(
     return sampleline
 
 
-def create_calculations_report(data, directory, sample, filtered=True):
+def create_calculations_report(data, directory, sample, region, filtered=True):
     """Creates a csv file for the data and calculations performed for a sample"""
     if filtered:
         sample_outfile = os.path.join(
-            directory, sample + "_full_filtered_calculations.csv"
+            directory, f"{sample}_pos_start_{region['pos_start']}_pos_fin_{region['pos_fin']}_full_filtered_calculations.csv"
         )
     else:
         sample_outfile = os.path.join(
-            directory, sample + "_failed_unfiltered_calculations.csv"
+            directory, f"{sample}_pos_start_{region['pos_start']}_pos_fin_{region['pos_fin']}_failed_unfiltered_calculations.csv"
         )
     data.to_csv(sample_outfile, sep=",", index=False)
-
-
-def get_positions_of_interest(param):
-    """Return positions in HXB2 coordinates to get data for"""
-    positions_of_interest = range(
-        param["pos_start"] + param["start_base"] - 1,
-        param["pos_fin"] + 1,
-        param["step"],
-    )
-    return positions_of_interest
-
 
 def get_region_data(base_frequency_file, positions):
     """Return base count data for region of interest"""
@@ -223,68 +226,72 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters):
                 out.write(null_data)
                 continue
             else:
-                # Calculate coverage
-                positions = get_positions_of_interest(parameters)
-                pol = get_region_data(base_frequency_file[0], positions)
-                pol = calculate_nucleotide_frequencies(pol)
-                cov_average = calculate_average_coverage(pol)
-                # Evaluate thresholds
-                cov_threshold = check_coverage_threshold(pol, parameters["min_cov"])
-                cov_1000 = check_coverage_threshold(pol, 1000)
-                pol_unfiltered = pol.copy(deep=True)
-                pol = remove_low_coverage_positions(pol, parameters["min_cov"])
-                if pol.empty:
-                    sample_results = format_output_string(
-                        ticket, sample, cov_threshold, cov_1000, cov_average
-                    )
-                    out.write(sample_results)
-                    create_calculations_report(pol_unfiltered, outputdir, sample, False)
-                    continue
-                else:
-                    # Perform ETI calculations
-                    pol = calculate_positional_distance(
-                        pol, parameters["diversity_threshold"]
-                    )
-                    pairwise_distance = pol["distance"].mean()
-                    pol["avg_pairwise_distance"] = pairwise_distance
-                    eti = calculate_eti(pairwise_distance, parameters)
-                    pol["ETI"] = eti
-                    # Create reports
-                    sample_results = format_output_string(
-                        ticket,
-                        sample,
-                        cov_threshold,
-                        cov_1000,
-                        cov_average,
-                        pairwise_distance,
-                        eti,
-                    )
-                    out.write(sample_results)
-                    create_calculations_report(pol, outputdir, sample)
+                for region_index, region in enumerate(regions):
+                    # Calculate coverage
+                    positions = get_positions_of_interest(region)
+                    pol = get_region_data(base_frequency_file[0], positions)
+                    pol = calculate_nucleotide_frequencies(pol)
+                    cov_average = calculate_average_coverage(pol)
+                    # Evaluate thresholds
+                    cov_threshold = check_coverage_threshold(pol, parameters["min_cov"])
+                    cov_1000 = check_coverage_threshold(pol, 1000)
+                    pol_unfiltered = pol.copy(deep=True)
+                    pol = remove_low_coverage_positions(pol, parameters["min_cov"])
+                    if pol.empty:
+                        sample_results = format_output_string(
+                            ticket, f"{sample}_pos_start_{region['pos_start']}_pos_fin_{region['pos_fin']}",
+                            cov_threshold, cov_1000, cov_average
+                        )
+                        out.write(sample_results)
+                        create_calculations_report(pol_unfiltered, outputdir, f"{sample}_region{region_index+1}", region, False)
+                        continue
+                    else:
+                        # Perform ETI calculations
+                        pol = calculate_positional_distance(
+                            pol, parameters["diversity_threshold"]
+                        )
+                        pairwise_distance = pol["distance"].mean()
+                        pol["avg_pairwise_distance"] = pairwise_distance
+                        eti = calculate_eti(pairwise_distance, parameters)
+                        pol["ETI"] = eti
+                        # Create reports
+                        sample_results = format_output_string(
+                            ticket,
+                            f"{sample}_pos_start_{region['pos_start']}_pos_fin_{region['pos_fin']}",
+                            cov_threshold,
+                            cov_1000,
+                            cov_average,
+                            pairwise_distance,
+                            eti,
+                        )
+                        out.write(sample_results)
+                        create_calculations_report(pol_unfiltered, outputdir, f"{sample}", region)
 
 
 def main():
     """Perform eti calculation for different settings for a batch of samples"""
-    parameters = {
-        "diversity_threshold": diversity_threshold,
-        "min_cov": min_cov,
-        "pos_start": pos_start,
-        "pos_fin": pos_fin,
-        "step": step,
-        "start_base": start_base,
-        "eti_m": eti_m,
-        "eti_c": eti_c,
-    }
+    for region in regions:
+        parameters = {
+            "diversity_threshold": diversity_threshold,
+            "min_cov": min_cov,
+            "pos_start": region["pos_start"],
+            "pos_fin": region["pos_fin"],
+            "step": step,
+            "start_base": start_base,
+            "eti_m": eti_m,
+            "eti_c": eti_c,
+        }
 
-    outputdir = os.path.dirname(eti_summary)
-    run_analysis(
-        samples,
-        eti_summary,
-        outputdir,
-        inputdir,
-        ticket,
-        parameters,
-    )
+        outputdir = os.path.dirname(eti_summary)
+        run_analysis(
+            samples,
+            eti_summary,
+            outputdir,
+            inputdir,
+            ticket,
+            parameters,
+        )
 
 
-main()
+if __name__ == "__main__":
+    main()
