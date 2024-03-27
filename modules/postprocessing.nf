@@ -18,7 +18,7 @@ process infectionEstimation {
     calculate_eti.py . \
     ${params.coverage_threshold_eti} \
     ${params.ticket} \
-    eti_calculations_${params.ticket}_${params.coverage_threshold_eti}X_\$(date +'%Y%m%d-%H%M%S').csv \
+    eti_calculations_${params.ticket}_${params.coverage_threshold_eti}X_withDC_\$(date +'%Y%m%d-%H%M%S').csv \
     ${samples}
     """
 }
