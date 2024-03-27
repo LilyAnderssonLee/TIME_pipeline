@@ -29,8 +29,8 @@ min_cov = int(coverage_threshold)
 # Define regions of interest
 original_region = {"pos_start": 2085, "pos_fin": 5096}
 DC_regions = [
-    {"pos_start": 2550, "pos_fin": 3510},
     {"pos_start": 2253, "pos_fin": 2538},
+    {"pos_start": 2550, "pos_fin": 3510}, 
     {"pos_start": 4359, "pos_fin": 5010}
 ]
 
