@@ -27,7 +27,7 @@ diversity_threshold = 0.01
 min_cov = int(coverage_threshold)
 
 # Define regions of interest
-original_region = {"pos_start": 2085, "pos_fin": 5096}
+full_region = {"pos_start": 2085, "pos_fin": 5096}
 DC_regions = [
     {"pos_start": 2253, "pos_fin": 2538},
     {"pos_start": 2550, "pos_fin": 3510}, 
@@ -206,7 +206,7 @@ def calculate_eti(pairwise_distance, parameters):
     eti = parameters["eti_m"] * pairwise_distance + parameters["eti_c"]
     return eti
 
-def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, original_region, DC_regions):
+def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, full_region, DC_regions):
     """Perform all calculations for a batch of samples and output reports"""
     with open(eti_summary, "w") as out:
         header = get_report_header(parameters)
@@ -224,8 +224,8 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, 
                 out.write(null_data)
                 continue
             else:
-                # Original region calculation
-                positions = get_positions_of_interest(original_region)
+                # Full region calculation
+                positions = get_positions_of_interest(full_region)
                 pol = get_region_data(base_frequency_file[0], positions)
                 pol = calculate_nucleotide_frequencies(pol)
                 cov_average = calculate_average_coverage(pol)
@@ -239,7 +239,7 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, 
                         cov_threshold, cov_1000, cov_average
                     )
                     out.write(sample_results)
-                    create_calculations_report(pol_unfiltered, outputdir, f"{sample}", original_region, False)
+                    create_calculations_report(pol_unfiltered, outputdir, f"{sample}", full_region, False)
                 else:
                     pol = calculate_positional_distance(pol, parameters["diversity_threshold"])
                     pairwise_distance = pol["distance"].mean()
@@ -256,7 +256,7 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, 
                         eti,
                     )
                     out.write(sample_results)
-                    create_calculations_report(pol, outputdir, f"{sample}", original_region)
+                    create_calculations_report(pol, outputdir, f"{sample}", full_region)
 
                 # Combined regions calculation
                 combined_data = pd.concat([get_region_data(base_frequency_file[0], get_positions_of_interest(region)) for region in DC_regions])
@@ -310,7 +310,7 @@ def main():
         inputdir,
         ticket,
         parameters,
-        original_region,
+        full_region,
         DC_regions
     )
 
