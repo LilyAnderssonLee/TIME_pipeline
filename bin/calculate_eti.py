@@ -27,7 +27,7 @@ diversity_threshold = 0.01
 min_cov = int(coverage_threshold)
 
 # Define regions of interest
-original_region = {"pos_start": 2085, "pos_fin": 5096}
+full_region = {"pos_start": 2085, "pos_fin": 5096}
 DC_regions = [
     {"pos_start": 2550, "pos_fin": 3510},
     {"pos_start": 2253, "pos_fin": 2538},
@@ -153,18 +153,17 @@ def calculate_average_coverage(pol):
     return pol["total_bases"].mean()
 
 
-def check_coverage_threshold(pol, min_cov):
+def check_coverage_threshold(pol, pol_length, min_cov):
     """Check if coverage for each position is above threshold.
     Returns percentage of bases that pass the coverage threshold"""
     column = str(min_cov) + "X_Coverage"
     pol.loc[pol["total_bases"] >= min_cov, column] = "Yes"
     pol.loc[pol["total_bases"] < min_cov, column] = "No"
     if "Yes" in pol[column].values:
-        pct_coverage = pol[column].value_counts()["Yes"] / len(pol) * 100
+        pct_coverage = pol[column].value_counts()["Yes"] / pol_length * 100
     else:
         pct_coverage = 0
     return pct_coverage
-
 
 def remove_low_coverage_positions(pol, min_cov):
     """Remove all positions with insufficient read depth"""
@@ -206,7 +205,7 @@ def calculate_eti(pairwise_distance, parameters):
     eti = parameters["eti_m"] * pairwise_distance + parameters["eti_c"]
     return eti
 
-def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, original_region, DC_regions):
+def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, full_region, DC_regions):
     """Perform all calculations for a batch of samples and output reports"""
     with open(eti_summary, "w") as out:
         header = get_report_header(parameters)
@@ -224,22 +223,23 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, 
                 out.write(null_data)
                 continue
             else:
-                # Original region calculation
-                positions = get_positions_of_interest(original_region)
+                # Full region calculation
+                positions = get_positions_of_interest(full_region)
                 pol = get_region_data(base_frequency_file[0], positions)
                 pol = calculate_nucleotide_frequencies(pol)
+                pol_length = len(pol)
                 cov_average = calculate_average_coverage(pol)
-                cov_threshold = check_coverage_threshold(pol, parameters["min_cov"])
-                cov_1000 = check_coverage_threshold(pol, 1000)
+                cov_threshold = check_coverage_threshold(pol, pol_length, parameters["min_cov"])
+                cov_1000 = check_coverage_threshold(pol, pol_length, 1000)
                 pol_unfiltered = pol.copy(deep=True)
                 pol = remove_low_coverage_positions(pol, parameters["min_cov"])
                 if pol.empty:
                     sample_results = format_output_string(
-                        ticket, f"{sample}",
+                        ticket, sample,
                         cov_threshold, cov_1000, cov_average
                     )
                     out.write(sample_results)
-                    #create_calculations_report(pol_unfiltered, outputdir, f"{sample}", original_region, False)
+                    create_calculations_report(pol_unfiltered, outputdir, sample, full_region, False)
                 else:
                     pol = calculate_positional_distance(pol, parameters["diversity_threshold"])
                     pairwise_distance = pol["distance"].mean()
@@ -248,7 +248,7 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, 
                     pol["ETI"] = eti
                     sample_results = format_output_string(
                         ticket,
-                        f"{sample}",
+                        sample,
                         cov_threshold,
                         cov_1000,
                         cov_average,
@@ -256,30 +256,30 @@ def run_analysis(samples, eti_summary, outputdir, inputdir, ticket, parameters, 
                         eti,
                     )
                     out.write(sample_results)
-                    #create_calculations_report(pol, outputdir, f"{sample}", original_region)
+                    create_calculations_report(pol, outputdir, sample, full_region)
 
-                # Combined regions calculation
+                # Combined DeepChek regions calculation
                 combined_data = pd.concat([get_region_data(base_frequency_file[0], get_positions_of_interest(region)) for region in DC_regions])
                 
-                pol = combined_data
-                pol = calculate_nucleotide_frequencies(pol)
-                cov_average = calculate_average_coverage(pol)
-                cov_threshold = check_coverage_threshold(pol, parameters["min_cov"])
-                cov_1000 = check_coverage_threshold(pol, 1000)
-                pol_unfiltered = pol.copy(deep=True)
-                pol = remove_low_coverage_positions(pol, parameters["min_cov"])
-                if pol.empty:
+                pol_DC = combined_data
+                pol_DC = calculate_nucleotide_frequencies(pol_DC)
+                cov_average = calculate_average_coverage(pol_DC)
+                cov_threshold = check_coverage_threshold(pol_DC, pol_length, parameters["min_cov"])
+                cov_1000 = check_coverage_threshold(pol_DC, pol_length, 1000)
+                #pol_DC_unfiltered = pol_DC.copy(deep=True)
+                pol_DC = remove_low_coverage_positions(pol_DC, parameters["min_cov"])
+                if pol_DC.empty:
                     sample_results = format_output_string(
                         ticket, f"{sample}_DC",
                         cov_threshold, cov_1000, cov_average
                     )
                     out.write(sample_results)
                 else:
-                    pol = calculate_positional_distance(pol, parameters["diversity_threshold"])
-                    pairwise_distance = pol["distance"].mean()
-                    pol["avg_pairwise_distance"] = pairwise_distance
+                    pol_DC = calculate_positional_distance(pol_DC, parameters["diversity_threshold"])
+                    pairwise_distance = pol_DC["distance"].mean()
+                    pol_DC["avg_pairwise_distance"] = pairwise_distance
                     eti = calculate_eti(pairwise_distance, parameters)
-                    pol["ETI"] = eti
+                    pol_DC["ETI"] = eti
                     sample_results = format_output_string(
                         ticket,
                         f"{sample}_DC",
@@ -310,8 +310,10 @@ def main():
         inputdir,
         ticket,
         parameters,
-        original_region,
+        full_region,
         DC_regions
     )
 
+
 main()
+        
